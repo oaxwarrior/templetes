@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cámara de Asistencia</title>
+    <!-- Librería fundamental de Telegram WebApp -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+    <h2>Toma tu foto de asistencia</h2>
+    <!-- Contenedor del video en vivo -->
+    <video id="camara" width="100%" autoplay playsinline></video>
+    <button id="capturar">Tomar Foto y Enviar</button>
+
+    <script>
+        // Inicializar la WebApp de Telegram
+        let tg = window.Telegram.WebApp;
+        tg.expand(); // Abre la app en pantalla completa
+
+        const video = document.getElementById('camara');
+        
+        // Solicitar acceso a la cámara frontal del celular
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
+            .then(stream => {
+                video.srcObject = stream;
+            })
+            .catch(err => {
+                console.error("Error al acceder a la cámara:", err);
+            });
+
+        // Lógica al presionar el botón
+        document.getElementById('capturar').addEventListener('click', () => {
+            // Aquí se extrae el frame del video y se procesa la imagen
+            
+            tg.sendData("FOTO_TOMADA_EN_VIVO"); // Avisa al bot en Telegram
+            tg.close(); // Cierra la Mini App y regresa al chat de Telegram
+        });
+    </script>
+</body>
+</html>
