@@ -10,13 +10,17 @@
         #error-msg { color: red; font-weight: bold; margin-top: 20px; }
         video { background: #000; border-radius: 10px; margin-bottom: 15px; }
         canvas { display: none; } /* Oculto, solo sirve para tomar la captura */
-        button { padding: 15px 20px; font-size: 16px; background: #0088cc; color: white; border: none; border-radius: 5px; }
+        button { padding: 15px 20px; font-size: 16px; background: #0088cc; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        button:disabled { background: #cccccc; cursor: not-allowed; }
     </style>
 </head>
 <body>
     <h2>Toma tu foto</h2>
+    
+    <!-- El atributo muted es obligatorio para que Android permita encender la cámara -->
     <video id="camara" width="100%" height="300" autoplay playsinline muted></video>
-    <!-- El canvas tomará la captura de la pantalla -->
+    
+    <!-- El canvas tomará la captura de la pantalla de forma invisible -->
     <canvas id="lienzo"></canvas> 
     
     <button id="capturar">Tomar Foto y Enviar</button>
@@ -31,9 +35,11 @@
         const errorMsg = document.getElementById('error-msg');
         const btnCapturar = document.getElementById('capturar');
 
-        // Obtener el ID del usuario de Telegram
-        const chatId = tg.initDataUnsafe?.user?.id || "desconocido";
+        // Obtener el ID del usuario desde Telegram o desde la URL que envía Python
+        const urlParams = new URLSearchParams(window.location.search);
+        const chatId = tg.initDataUnsafe?.user?.id || urlParams.get('userid') || "desconocido";
 
+        // Solicitar permisos y encender la cámara frontal
         navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
             .then(stream => {
                 video.srcObject = stream;
@@ -43,40 +49,45 @@
                 errorMsg.innerHTML = "Error al abrir cámara: " + err.message;
             });
 
+        // Lógica para capturar y enviar la foto
         btnCapturar.addEventListener('click', () => {
-            btnCapturar.innerText = "Enviando..."; // Cambia el texto para que el usuario espere
+            btnCapturar.innerText = "Enviando..."; 
             btnCapturar.disabled = true;
+            errorMsg.innerHTML = "";
 
-            // Ajustar el canvas al tamaño del video
+            // Ajustar el canvas a la resolución real del video
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             const contexto = canvas.getContext('2d');
             
-            // Dibujar la imagen del video en el canvas
+            // "Tomar la foto" dibujando el cuadro actual del video en el canvas
             contexto.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-            // Convertir el canvas a un archivo JPG
+            // Convertir el canvas a un archivo de imagen JPG
             canvas.toBlob(function(blob) {
-                // Preparar los datos para enviarlos a PythonAnywhere
                 const formData = new FormData();
                 formData.append('foto', blob, 'foto.jpg');
-                formData.append('chat_id', chatId);
+                formData.append('chat_id', chatId); // Asegura que el ID llegue a Python
 
-                // Enviar la foto a tu servidor real
+                // Enviar el archivo a tu servidor Flask en PythonAnywhere
                 fetch('https://canseko.pythonanywhere.com/upload_foto', {
                     method: 'POST',
                     body: formData
                 })
                 .then(response => response.json())
                 .then(data => {
-                    tg.close(); // Cierra la App si se envió con éxito
+                    if (data.status === "ok") {
+                        tg.close(); // Cierra la App si la foto se recibió correctamente
+                    } else {
+                        throw new Error(data.error || "Error desconocido");
+                    }
                 })
                 .catch(error => {
-                    errorMsg.innerHTML = "Error al subir la foto.";
+                    errorMsg.innerHTML = "Error al subir la foto al servidor.";
                     btnCapturar.innerText = "Reintentar";
                     btnCapturar.disabled = false;
                 });
-            }, 'image/jpeg');
+            }, 'image/jpeg', 0.8); // 0.8 es la calidad de compresión de la imagen (80%)
         });
     </script>
 </body>
