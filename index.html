@@ -9,15 +9,17 @@
         body { font-family: Arial; text-align: center; padding: 20px; }
         #error-msg { color: red; font-weight: bold; margin-top: 20px; }
         video { background: #000; border-radius: 10px; margin-bottom: 15px; }
+        canvas { display: none; } /* Oculto, solo sirve para tomar la captura */
         button { padding: 15px 20px; font-size: 16px; background: #0088cc; color: white; border: none; border-radius: 5px; }
     </style>
 </head>
 <body>
     <h2>Toma tu foto</h2>
     <video id="camara" width="100%" height="300" autoplay playsinline muted></video>
-    <button id="capturar">Tomar Foto y Enviar</button>
+    <!-- El canvas tomará la captura de la pantalla -->
+    <canvas id="lienzo"></canvas> 
     
-    <!-- Aquí mostraremos el error si la cámara falla -->
+    <button id="capturar">Tomar Foto y Enviar</button>
     <div id="error-msg"></div>
 
     <script>
@@ -25,23 +27,56 @@
         tg.expand(); 
 
         const video = document.getElementById('camara');
+        const canvas = document.getElementById('lienzo');
         const errorMsg = document.getElementById('error-msg');
+        const btnCapturar = document.getElementById('capturar');
 
-        // Intentar acceder a la cámara frontal del celular
+        // Obtener el ID del usuario de Telegram
+        const chatId = tg.initDataUnsafe?.user?.id || "desconocido";
+
         navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
             .then(stream => {
                 video.srcObject = stream;
-                video.play(); // Obliga a Android a reproducir el video en lugar de pausarlo
+                video.play();
             })
             .catch(err => {
-                // Si falla, escribimos el error en la pantalla del celular
-                errorMsg.innerHTML = "Error al abrir cámara: <br>" + err.name + " - " + err.message;
+                errorMsg.innerHTML = "Error al abrir cámara: " + err.message;
             });
 
-        // Lógica al presionar el botón azul
-        document.getElementById('capturar').addEventListener('click', () => {
-            tg.sendData("FOTO_TOMADA_EN_VIVO"); // Avisa al bot en Python
-            tg.close(); // Cierra la Mini App
+        btnCapturar.addEventListener('click', () => {
+            btnCapturar.innerText = "Enviando..."; // Cambia el texto para que el usuario espere
+            btnCapturar.disabled = true;
+
+            // Ajustar el canvas al tamaño del video
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const contexto = canvas.getContext('2d');
+            
+            // Dibujar la imagen del video en el canvas
+            contexto.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            // Convertir el canvas a un archivo JPG
+            canvas.toBlob(function(blob) {
+                // Preparar los datos para enviarlos a PythonAnywhere
+                const formData = new FormData();
+                formData.append('foto', blob, 'foto.jpg');
+                formData.append('chat_id', chatId);
+
+                // Enviar la foto a tu servidor real
+                fetch('https://canseko.pythonanywhere.com/upload_foto', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    tg.close(); // Cierra la App si se envió con éxito
+                })
+                .catch(error => {
+                    errorMsg.innerHTML = "Error al subir la foto.";
+                    btnCapturar.innerText = "Reintentar";
+                    btnCapturar.disabled = false;
+                });
+            }, 'image/jpeg');
         });
     </script>
 </body>
