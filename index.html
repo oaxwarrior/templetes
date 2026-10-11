@@ -27,19 +27,21 @@
         const video = document.getElementById('camara');
         const errorMsg = document.getElementById('error-msg');
 
-        // Intentar acceder a la cámara
+        // Intentar acceder a la cámara frontal del celular
         navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } })
             .then(stream => {
                 video.srcObject = stream;
+                video.play(); // Obliga a Android a reproducir el video en lugar de pausarlo
             })
             .catch(err => {
                 // Si falla, escribimos el error en la pantalla del celular
                 errorMsg.innerHTML = "Error al abrir cámara: <br>" + err.name + " - " + err.message;
             });
 
+        // Lógica al presionar el botón azul
         document.getElementById('capturar').addEventListener('click', () => {
-            tg.sendData("FOTO_TOMADA_EN_VIVO"); 
-            tg.close(); 
+            tg.sendData("FOTO_TOMADA_EN_VIVO"); // Avisa al bot en Python
+            tg.close(); // Cierra la Mini App
         });
     </script>
 </body>
