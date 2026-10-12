@@ -7,7 +7,8 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         body { font-family: Arial; text-align: center; padding: 20px; background-color: #f4f4f9; }
-        h3 { color: #333; margin-bottom: 20px; }
+        h3 { color: #333; margin-bottom: 5px; }
+        .nota { font-size: 14px; color: #666; margin-bottom: 20px; font-style: italic; }
         #error-msg { color: red; font-weight: bold; margin-top: 20px; }
         .btn { display: inline-block; padding: 15px 20px; font-size: 16px; color: white; border: none; border-radius: 8px; cursor: pointer; width: 90%; max-width: 300px; margin: 10px auto; text-transform: uppercase; font-weight: bold; }
         .btn-blue { background: #0088cc; }
@@ -22,18 +23,15 @@
 </head>
 <body>
     <h3 id="instruccion">Cargando...</h3>
+    <div class="nota">Si se abre un menú, selecciona "Cámara"</div>
 
-    <!-- Botón visible que el usuario presiona -->
     <button class="btn btn-blue" id="btn-abrir-camara">📸 Abrir Cámara</button>
 
-    <!-- Inputs fijos desde el inicio para obligar a Android a usar la cámara -->
-    <input type="file" id="camFrontal" accept="image/*" capture="user">
-    <input type="file" id="camTrasera" accept="image/*" capture="environment">
+    <!-- Usamos el atributo capture en su forma más básica para intentar saltar el bloqueo de Telegram -->
+    <input type="file" id="camaraOculta" accept="image/*" capture>
 
-    <!-- Espacio para la vista previa de la foto -->
     <img id="preview" alt="Vista previa">
 
-    <!-- Botón para mandar la foto al servidor -->
     <button class="btn btn-green" id="btn-enviar" style="display: none;">✅ Enviar al Servidor</button>
     <div id="error-msg"></div>
 
@@ -50,12 +48,7 @@
         const btnEnviar = document.getElementById('btn-enviar');
         const preview = document.getElementById('preview');
         const errorMsg = document.getElementById('error-msg');
-        
-        const camFrontal = document.getElementById('camFrontal');
-        const camTrasera = document.getElementById('camTrasera');
-
-        // Determinar qué input vamos a usar
-        let inputActivo = modoCamara === "trasera" ? camTrasera : camFrontal;
+        const camaraOculta = document.getElementById('camaraOculta');
 
         if (modoCamara === "trasera") {
             instruccion.innerText = "Paso 2/2: Área de trabajo";
@@ -63,30 +56,23 @@
             instruccion.innerText = "Paso 1/2: Toma tu selfie";
         }
 
-        // Al presionar el botón azul, hacemos "clic" invisible en el input correcto
         btnAbrir.addEventListener('click', () => {
-            inputActivo.click();
+            camaraOculta.click();
         });
 
-        // Función cuando la cámara devuelve la foto
-        const procesarFoto = (e) => {
+        camaraOculta.addEventListener('change', (e) => {
             if (e.target.files && e.target.files.length > 0) {
                 const archivo = e.target.files[0];
                 preview.src = URL.createObjectURL(archivo);
                 preview.style.display = "block"; 
-                btnAbrir.innerText = "🔄 Cambiar Foto"; 
+                btnAbrir.innerText = "🔄 Volver a Tomar"; 
                 btnEnviar.style.display = "inline-block"; 
                 errorMsg.innerHTML = "";
             }
-        };
+        });
 
-        // Escuchar a ambos inputs por si acaso
-        camFrontal.addEventListener('change', procesarFoto);
-        camTrasera.addEventListener('change', procesarFoto);
-
-        // Cuando el usuario acepta enviar la foto
         btnEnviar.addEventListener('click', () => {
-            const archivo = inputActivo.files[0];
+            const archivo = camaraOculta.files[0];
             if (!archivo) return;
 
             btnEnviar.innerText = "Subiendo foto...";
