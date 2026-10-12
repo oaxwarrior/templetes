@@ -16,7 +16,7 @@
     </style>
 </head>
 <body>
-    <div id="instruccion">Iniciando cámara, por favor espera...</div>
+    <div id="instruccion">Iniciando cámara...</div>
     <video id="camara" width="100%" height="300" autoplay playsinline muted></video>
     <canvas id="lienzo"></canvas> 
     
@@ -37,6 +37,8 @@
         const chatId = tg.initDataUnsafe?.user?.id || urlParams.get('userid') || "desconocido";
         const modoCamara = urlParams.get('modo') || "frontal"; 
 
+        let streamActual = null; // Variable para guardar el control de la cámara
+
         if (modoCamara === "trasera") {
             instruccion.innerText = "2/2: Toma foto de tu área de trabajo";
             btnCapturar.innerText = "Capturar Área y Finalizar";
@@ -45,7 +47,6 @@
             btnCapturar.innerText = "Capturar Selfie y Continuar";
         }
 
-        // RETRASO DE 1 SEGUNDO: Le da tiempo a Android de liberar la cámara anterior
         setTimeout(() => {
             let restricciones = modoCamara === "trasera" 
                 ? { video: { facingMode: "environment" } } 
@@ -53,14 +54,15 @@
 
             navigator.mediaDevices.getUserMedia(restricciones)
                 .then(stream => {
+                    streamActual = stream; // Guardamos el control
                     video.srcObject = stream;
                     video.play();
                 })
                 .catch(err => {
-                    // PLAN B: Si el celular bloquea la instrucción "environment", pedimos la cámara por defecto
                     if (modoCamara === "trasera") {
                         navigator.mediaDevices.getUserMedia({ video: true })
                             .then(streamFallback => {
+                                streamActual = streamFallback;
                                 video.srcObject = streamFallback;
                                 video.play();
                             })
@@ -71,7 +73,7 @@
                         errorMsg.innerHTML = "Error al abrir la cámara: " + err.message;
                     }
                 });
-        }, 1000); 
+        }, 800); 
 
         btnCapturar.addEventListener('click', () => {
             btnCapturar.innerText = "Enviando al servidor..."; 
@@ -96,6 +98,10 @@
                 .then(response => response.json())
                 .then(data => {
                     if (data.status === "ok") {
+                        // AQUÍ ESTÁ LA MAGIA: Apagamos la cámara a la fuerza antes de salir
+                        if (streamActual) {
+                            streamActual.getTracks().forEach(track => track.stop());
+                        }
                         tg.close(); 
                     } else {
                         throw new Error(data.error || "Error desconocido");
