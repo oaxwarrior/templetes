@@ -6,113 +6,100 @@
     <title>Cámara de Asistencia</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        body { font-family: Arial; text-align: center; padding: 20px; }
-        #instruccion { font-size: 18px; font-weight: bold; margin-bottom: 15px; color: #333; }
+        body { font-family: Arial; text-align: center; padding: 20px; background-color: #f4f4f9; }
+        h3 { color: #333; margin-bottom: 20px; }
         #error-msg { color: red; font-weight: bold; margin-top: 20px; }
-        video { background: #000; border-radius: 10px; margin-bottom: 15px; }
-        canvas { display: none; } 
-        button { padding: 15px 20px; font-size: 16px; background: #0088cc; color: white; border: none; border-radius: 5px; cursor: pointer; }
-        button:disabled { background: #cccccc; cursor: not-allowed; }
+        .btn { display: inline-block; padding: 15px 20px; font-size: 16px; color: white; border: none; border-radius: 8px; cursor: pointer; width: 90%; max-width: 300px; margin: 10px auto; text-transform: uppercase; font-weight: bold; }
+        .btn-blue { background: #0088cc; }
+        .btn-green { background: #28a745; }
+        .btn:disabled { background: #cccccc; cursor: not-allowed; }
+        input[type="file"] { display: none; }
+        #preview { max-width: 90%; border-radius: 10px; display: none; margin: 15px auto; border: 3px solid #0088cc; }
     </style>
 </head>
 <body>
-    <div id="instruccion">Iniciando cámara...</div>
-    <video id="camara" width="100%" height="300" autoplay playsinline muted></video>
-    <canvas id="lienzo"></canvas> 
-    
-    <button id="capturar">Capturar y Enviar</button>
+    <h3 id="instruccion">Cargando...</h3>
+
+    <!-- Botón que invoca la cámara nativa del teléfono -->
+    <label for="cameraInput" class="btn btn-blue" id="btn-abrir-camara">📸 Abrir Cámara</label>
+    <input type="file" id="cameraInput" accept="image/*">
+
+    <!-- Espacio para la vista previa de la foto -->
+    <img id="preview" alt="Vista previa">
+
+    <!-- Botón para mandar la foto al servidor -->
+    <button class="btn btn-green" id="btn-enviar" style="display: none;">✅ Enviar al Servidor</button>
     <div id="error-msg"></div>
 
     <script>
         let tg = window.Telegram.WebApp;
-        tg.expand(); 
-
-        const video = document.getElementById('camara');
-        const canvas = document.getElementById('lienzo');
-        const errorMsg = document.getElementById('error-msg');
-        const btnCapturar = document.getElementById('capturar');
-        const instruccion = document.getElementById('instruccion');
+        tg.expand();
 
         const urlParams = new URLSearchParams(window.location.search);
         const chatId = tg.initDataUnsafe?.user?.id || urlParams.get('userid') || "desconocido";
-        const modoCamara = urlParams.get('modo') || "frontal"; 
+        const modoCamara = urlParams.get('modo') || "frontal";
 
-        let streamActual = null; // Variable para guardar el control de la cámara
+        const instruccion = document.getElementById('instruccion');
+        const cameraInput = document.getElementById('cameraInput');
+        const preview = document.getElementById('preview');
+        const btnAbrir = document.getElementById('btn-abrir-camara');
+        const btnEnviar = document.getElementById('btn-enviar');
+        const errorMsg = document.getElementById('error-msg');
 
+        // Determinar qué cámara usar según la fase
         if (modoCamara === "trasera") {
-            instruccion.innerText = "2/2: Toma foto de tu área de trabajo";
-            btnCapturar.innerText = "Capturar Área y Finalizar";
+            instruccion.innerText = "Paso 2/2: Área de trabajo";
+            cameraInput.setAttribute("capture", "environment"); // Pide cámara trasera
         } else {
-            instruccion.innerText = "1/2: Toma tu selfie";
-            btnCapturar.innerText = "Capturar Selfie y Continuar";
+            instruccion.innerText = "Paso 1/2: Toma tu selfie";
+            cameraInput.setAttribute("capture", "user"); // Pide cámara frontal
         }
 
-        setTimeout(() => {
-            let restricciones = modoCamara === "trasera" 
-                ? { video: { facingMode: "environment" } } 
-                : { video: { facingMode: "user" } };
+        // Cuando la cámara nativa devuelve la foto
+        cameraInput.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files.length > 0) {
+                const archivo = e.target.files[0];
+                preview.src = URL.createObjectURL(archivo);
+                preview.style.display = "block"; // Mostrar la foto en pantalla
+                btnAbrir.innerText = "🔄 Cambiar Foto"; // Por si salieron mal
+                btnEnviar.style.display = "inline-block"; // Mostrar botón de enviar
+                errorMsg.innerHTML = "";
+            }
+        });
 
-            navigator.mediaDevices.getUserMedia(restricciones)
-                .then(stream => {
-                    streamActual = stream; // Guardamos el control
-                    video.srcObject = stream;
-                    video.play();
-                })
-                .catch(err => {
-                    if (modoCamara === "trasera") {
-                        navigator.mediaDevices.getUserMedia({ video: true })
-                            .then(streamFallback => {
-                                streamActual = streamFallback;
-                                video.srcObject = streamFallback;
-                                video.play();
-                            })
-                            .catch(e => {
-                                errorMsg.innerHTML = "Error al abrir cámara trasera: " + e.message;
-                            });
-                    } else {
-                        errorMsg.innerHTML = "Error al abrir la cámara: " + err.message;
-                    }
-                });
-        }, 800); 
+        // Cuando el usuario acepta enviar la foto
+        btnEnviar.addEventListener('click', () => {
+            const archivo = cameraInput.files[0];
+            if (!archivo) return;
 
-        btnCapturar.addEventListener('click', () => {
-            btnCapturar.innerText = "Enviando al servidor..."; 
-            btnCapturar.disabled = true;
+            btnEnviar.innerText = "Subiendo foto...";
+            btnEnviar.disabled = true;
+            btnAbrir.style.display = "none";
             errorMsg.innerHTML = "";
 
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            const contexto = canvas.getContext('2d');
-            contexto.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const formData = new FormData();
+            formData.append('foto', archivo, 'foto.jpg');
+            formData.append('chat_id', chatId);
+            formData.append('tipo', modoCamara);
 
-            canvas.toBlob(function(blob) {
-                const formData = new FormData();
-                formData.append('foto', blob, 'foto.jpg');
-                formData.append('chat_id', chatId);
-                formData.append('tipo', modoCamara); 
-
-                fetch('https://canseko.pythonanywhere.com/upload_foto', {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === "ok") {
-                        // AQUÍ ESTÁ LA MAGIA: Apagamos la cámara a la fuerza antes de salir
-                        if (streamActual) {
-                            streamActual.getTracks().forEach(track => track.stop());
-                        }
-                        tg.close(); 
-                    } else {
-                        throw new Error(data.error || "Error desconocido");
-                    }
-                })
-                .catch(error => {
-                    errorMsg.innerHTML = "Error al subir la foto. Intenta de nuevo.";
-                    btnCapturar.innerText = "Reintentar Envío";
-                    btnCapturar.disabled = false;
-                });
-            }, 'image/jpeg', 0.8);
+            fetch('https://canseko.pythonanywhere.com/upload_foto', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === "ok") {
+                    tg.close();
+                } else {
+                    throw new Error(data.error || "Error desconocido");
+                }
+            })
+            .catch(error => {
+                errorMsg.innerHTML = "Error al subir la foto. Intenta de nuevo.";
+                btnEnviar.innerText = "✅ Reintentar Envío";
+                btnEnviar.disabled = false;
+                btnAbrir.style.display = "inline-block";
+            });
         });
     </script>
 </body>
