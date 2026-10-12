@@ -13,16 +13,22 @@
         .btn-blue { background: #0088cc; }
         .btn-green { background: #28a745; }
         .btn:disabled { background: #cccccc; cursor: not-allowed; }
+        
+        /* Ocultamos los verdaderos inputs */
         input[type="file"] { display: none; }
+        
         #preview { max-width: 90%; border-radius: 10px; display: none; margin: 15px auto; border: 3px solid #0088cc; }
     </style>
 </head>
 <body>
     <h3 id="instruccion">Cargando...</h3>
 
-    <!-- Botón que invoca la cámara nativa del teléfono -->
-    <label for="cameraInput" class="btn btn-blue" id="btn-abrir-camara">📸 Abrir Cámara</label>
-    <input type="file" id="cameraInput" accept="image/*">
+    <!-- Botón visible que el usuario presiona -->
+    <button class="btn btn-blue" id="btn-abrir-camara">📸 Abrir Cámara</button>
+
+    <!-- Inputs fijos desde el inicio para obligar a Android a usar la cámara -->
+    <input type="file" id="camFrontal" accept="image/*" capture="user">
+    <input type="file" id="camTrasera" accept="image/*" capture="environment">
 
     <!-- Espacio para la vista previa de la foto -->
     <img id="preview" alt="Vista previa">
@@ -40,36 +46,47 @@
         const modoCamara = urlParams.get('modo') || "frontal";
 
         const instruccion = document.getElementById('instruccion');
-        const cameraInput = document.getElementById('cameraInput');
-        const preview = document.getElementById('preview');
         const btnAbrir = document.getElementById('btn-abrir-camara');
         const btnEnviar = document.getElementById('btn-enviar');
+        const preview = document.getElementById('preview');
         const errorMsg = document.getElementById('error-msg');
+        
+        const camFrontal = document.getElementById('camFrontal');
+        const camTrasera = document.getElementById('camTrasera');
 
-        // Determinar qué cámara usar según la fase
+        // Determinar qué input vamos a usar
+        let inputActivo = modoCamara === "trasera" ? camTrasera : camFrontal;
+
         if (modoCamara === "trasera") {
             instruccion.innerText = "Paso 2/2: Área de trabajo";
-            cameraInput.setAttribute("capture", "environment"); // Pide cámara trasera
         } else {
             instruccion.innerText = "Paso 1/2: Toma tu selfie";
-            cameraInput.setAttribute("capture", "user"); // Pide cámara frontal
         }
 
-        // Cuando la cámara nativa devuelve la foto
-        cameraInput.addEventListener('change', (e) => {
+        // Al presionar el botón azul, hacemos "clic" invisible en el input correcto
+        btnAbrir.addEventListener('click', () => {
+            inputActivo.click();
+        });
+
+        // Función cuando la cámara devuelve la foto
+        const procesarFoto = (e) => {
             if (e.target.files && e.target.files.length > 0) {
                 const archivo = e.target.files[0];
                 preview.src = URL.createObjectURL(archivo);
-                preview.style.display = "block"; // Mostrar la foto en pantalla
-                btnAbrir.innerText = "🔄 Cambiar Foto"; // Por si salieron mal
-                btnEnviar.style.display = "inline-block"; // Mostrar botón de enviar
+                preview.style.display = "block"; 
+                btnAbrir.innerText = "🔄 Cambiar Foto"; 
+                btnEnviar.style.display = "inline-block"; 
                 errorMsg.innerHTML = "";
             }
-        });
+        };
+
+        // Escuchar a ambos inputs por si acaso
+        camFrontal.addEventListener('change', procesarFoto);
+        camTrasera.addEventListener('change', procesarFoto);
 
         // Cuando el usuario acepta enviar la foto
         btnEnviar.addEventListener('click', () => {
-            const archivo = cameraInput.files[0];
+            const archivo = inputActivo.files[0];
             if (!archivo) return;
 
             btnEnviar.innerText = "Subiendo foto...";
