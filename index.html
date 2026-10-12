@@ -40,20 +40,34 @@
         let blobFrontal = null;
         let streamActual = null;
 
-        // Función para encender la cámara solicitada (user = frontal, environment = trasera)
         function iniciarCamara(modo) {
+            // 1. Apagar la cámara actual completamente
             if (streamActual) {
-                streamActual.getTracks().forEach(track => track.stop()); // Apagar cámara anterior
+                streamActual.getTracks().forEach(track => track.stop());
             }
-            navigator.mediaDevices.getUserMedia({ video: { facingMode: modo } })
-                .then(stream => {
-                    streamActual = stream;
-                    video.srcObject = stream;
-                    video.play();
-                })
-                .catch(err => {
-                    errorMsg.innerHTML = "Error al abrir cámara: " + err.message;
-                });
+            video.srcObject = null; // Limpiar el reproductor de video
+
+            // 2. Esperar medio segundo antes de encender la siguiente cámara
+            setTimeout(() => {
+                navigator.mediaDevices.getUserMedia({ video: { facingMode: modo } })
+                    .then(stream => {
+                        streamActual = stream;
+                        video.srcObject = stream;
+                        video.play();
+                    })
+                    .catch(err => {
+                        // Fallback por si el celular no tiene cámara trasera definida
+                        errorMsg.innerHTML = "Error de hardware, intentando cámara por defecto...";
+                        navigator.mediaDevices.getUserMedia({ video: true })
+                            .then(fallbackStream => {
+                                streamActual = fallbackStream;
+                                video.srcObject = fallbackStream;
+                                video.play();
+                            }).catch(e => {
+                                errorMsg.innerHTML = "No se pudo iniciar la cámara: " + e.message;
+                            });
+                    });
+            }, 500); 
         }
 
         // Iniciar con la cámara frontal
@@ -66,17 +80,15 @@
             contexto.drawImage(video, 0, 0, canvas.width, canvas.height);
 
             if (fase === 1) {
-                // FASE 1: Guardar Selfie temporalmente y cambiar a cámara trasera
                 canvas.toBlob(function(blob) {
                     blobFrontal = blob;
                     fase = 2;
                     instruccion.innerText = "2/2: Toma foto de tu área de trabajo";
                     btnCapturar.innerText = "Capturar Área y Enviar";
-                    iniciarCamara("environment"); // Cambiar a cámara trasera
+                    iniciarCamara("environment"); // Activa el cambio con la pausa de 500ms
                 }, 'image/jpeg', 0.8);
             } 
             else if (fase === 2) {
-                // FASE 2: Guardar Área de Trabajo y enviar ambas al servidor
                 btnCapturar.innerText = "Enviando al servidor..."; 
                 btnCapturar.disabled = true;
                 errorMsg.innerHTML = "";
