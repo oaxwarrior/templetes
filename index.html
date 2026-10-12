@@ -41,36 +41,41 @@
         let streamActual = null;
 
         function iniciarCamara(modo) {
-            // 1. Apagar la cámara actual completamente
+            // 1. Detener la cámara actual
             if (streamActual) {
                 streamActual.getTracks().forEach(track => track.stop());
             }
-            video.srcObject = null; // Limpiar el reproductor de video
+            video.srcObject = null;
+            video.load(); // Forzar a Android a limpiar el reproductor
 
-            // 2. Esperar medio segundo antes de encender la siguiente cámara
+            // 2. Definir si pedimos la cámara frontal o la trasera exacta
+            let restricciones = modo === "environment" 
+                ? { video: { facingMode: { exact: "environment" } } } 
+                : { video: { facingMode: "user" } };
+
+            // 3. Darle 800ms al celular para liberar la memoria antes de encender la otra lente
             setTimeout(() => {
-                navigator.mediaDevices.getUserMedia({ video: { facingMode: modo } })
+                navigator.mediaDevices.getUserMedia(restricciones)
                     .then(stream => {
                         streamActual = stream;
                         video.srcObject = stream;
-                        video.play();
+                        video.onloadedmetadata = () => video.play(); // Reproducir solo cuando esté lista
                     })
                     .catch(err => {
-                        // Fallback por si el celular no tiene cámara trasera definida
-                        errorMsg.innerHTML = "Error de hardware, intentando cámara por defecto...";
-                        navigator.mediaDevices.getUserMedia({ video: true })
-                            .then(fallbackStream => {
-                                streamActual = fallbackStream;
-                                video.srcObject = fallbackStream;
-                                video.play();
+                        // Si falla la petición estricta, intentamos una relajada
+                        navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+                            .then(stream => {
+                                streamActual = stream;
+                                video.srcObject = stream;
+                                video.onloadedmetadata = () => video.play();
                             }).catch(e => {
-                                errorMsg.innerHTML = "No se pudo iniciar la cámara: " + e.message;
+                                errorMsg.innerHTML = "Error al iniciar cámara: " + e.message;
                             });
                     });
-            }, 500); 
+            }, 800); 
         }
 
-        // Iniciar con la cámara frontal
+        // Iniciar la app pidiendo la frontal
         iniciarCamara("user");
 
         btnCapturar.addEventListener('click', () => {
@@ -85,7 +90,7 @@
                     fase = 2;
                     instruccion.innerText = "2/2: Toma foto de tu área de trabajo";
                     btnCapturar.innerText = "Capturar Área y Enviar";
-                    iniciarCamara("environment"); // Activa el cambio con la pausa de 500ms
+                    iniciarCamara("environment"); // Inicia el cambio de cámara
                 }, 'image/jpeg', 0.8);
             } 
             else if (fase === 2) {
@@ -112,7 +117,7 @@
                         }
                     })
                     .catch(error => {
-                        errorMsg.innerHTML = "Error al subir las fotos.";
+                        errorMsg.innerHTML = "Error al subir las fotos. Intenta de nuevo.";
                         btnCapturar.innerText = "Reintentar Envío";
                         btnCapturar.disabled = false;
                     });
